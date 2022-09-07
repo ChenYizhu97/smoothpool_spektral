@@ -86,12 +86,12 @@ class SmoothMP(MessagePassing):
         return diff
     
     def aggregate(self, messages, e=None, **kwargs):
-        diff = scatter_mean(messages, self.index_targets, self.n_nodes)
+        diff_agg = scatter_mean(messages, self.index_targets, self.n_nodes)
         if e is not None and self.use_edge_features:
-            divergence = scatter_mean(e, self.index_targets, self.n_nodes)
-            return tf.concat([diff, divergence], -1)
+            divergence = scatter_sum(e, self.index_targets, self.n_nodes)
+            return tf.concat([diff_agg, divergence], -1)
         else:
-            return diff
+            return diff_agg
     
     def call(self, inputs, **kwargs):
         x, a, e = self.get_inputs(inputs)

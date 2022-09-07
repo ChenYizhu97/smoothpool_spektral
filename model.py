@@ -1,3 +1,4 @@
+from re import S
 import tensorflow as tf
 
 from spektral.layers.convolutional import GCNConv 
@@ -7,7 +8,7 @@ from spektral.layers.pooling import (
     LaPool,
     DiffPool,
     TopKPool,
-    SAGPool
+    SAGPool,
 )
 from tensorflow.keras import Model, Sequential
 from tensorflow.keras.layers import (
@@ -17,6 +18,20 @@ from tensorflow.keras.layers import (
     Dropout,
 )
 
+def get_hpool(h_pool, k, hidden, connectivity_augment=None, use_edge_features=False):
+    if h_pool == "lapool":
+        h_pool = LaPool()
+    if h_pool == "diffpool" and k is not None:
+        h_pool = DiffPool(k, hidden, activation=None)
+    if h_pool == "topkpool" and k is not None:
+        h_pool = TopKPool(k)
+    if h_pool == "smoothpool" and k is not None:
+        mlp = MLP(1, hidden=hidden, layers=3, final_activation="sigmoid")
+        h_pool = SmoothPool(k, mlp=mlp, connectivity_augment=connectivity_augment, use_edge_features=use_edge_features)
+    if h_pool == "sagpool" and k is not None:
+        h_pool = SAGPool(k)
+
+    return h_pool
 
 class HpoolGNN(Model):
 
@@ -25,10 +40,9 @@ class HpoolGNN(Model):
         output,
         activation=None,
         hidden=256,
-        message_passing=5,
-        pre_process=3,
-        post_process=2,
-        edge_process=2, 
+        preprocess_layers=3,
+        readout_layers=2,
+        edge_preprocess_layers=2, 
         hidden_activation="tanh",
         gpool="sum",
         i_hpool=None,
@@ -42,9 +56,8 @@ class HpoolGNN(Model):
             "output": output,
             "activation": activation,
             "hidden": hidden,
-            "message_passing": message_passing,
-            "pre_process": pre_process,
-            "post_process": post_process,
+            "preprocess_layers": preprocess_layers,
+            "readout_layers": readout_layers,
             "hidden_activation": hidden_activation,
             "gpool": gpool,
             "i_hpool": i_hpool,
@@ -52,7 +65,7 @@ class HpoolGNN(Model):
             "k": k,
             "connectivity_augmen": connectivity_augment,
             "use_edge_features": use_edge_features,
-            "edge_process": edge_process
+            "edge_preprocess_layers": edge_preprocess_layers
         }
 
         # Global pooling
@@ -62,53 +75,95 @@ class HpoolGNN(Model):
             self.gpool = None
 
         self.use_edge_features=use_edge_features
-        self.gnn = [
-            GCNConv(hidden, hidden_activation)
-            for _ in range(message_passing)
-        ]
-         # Neural blocks
-        self.pre = MLP(
+
+        self.pre_nodes = MLP(
             hidden,
             hidden,
-            pre_process,
+            preprocess_layers,
             activation=hidden_activation,
             final_activation=hidden_activation,
         )
-        self.i_hpool = i_hpool
-        
+
         self.k = k
-
+        self.batch_mode = False
         self.pool_method = h_pool
-        if h_pool == "lapool":
-            self.h_pool = LaPool()
-        if h_pool == "diffpool" and k is not None:
-            self.h_pool = DiffPool(k, hidden, activation=None)
-        if h_pool == "topkpool" and k is not None:
-            self.h_pool = TopKPool(k)
-        if h_pool == "smoothpool" and k is not None:
-            mlp = MLP(1, hidden=hidden, layers=3, final_activation="sigmoid")
-            self.h_pool = SmoothPool(k, mlp=mlp, connectivity_augment=connectivity_augment, use_edge_features=use_edge_features)
-        if h_pool == "sagpool" and k is not None:
-            self.h_pool = SAGPool(k)
 
+        self.conv1 = GCNConv(hidden, hidden_activation)
+        self.conv2 = GCNConv(hidden, hidden_activation)
+        self.pool1 = get_hpool(self.pool_method, self.k, hidden, connectivity_augment=connectivity_augment, use_edge_features=use_edge_features)
+        self.conv3 = GCNConv(hidden, hidden_activation)
+        self.conv4 = GCNConv(hidden, hidden_activation)
+        self.pool2 = get_hpool(self.pool_method, self.k, hidden, connectivity_augment=connectivity_augment, use_edge_features=use_edge_features)
+        self.conv5 = GCNConv(hidden, hidden_activation)
 
-        self.post = MLP(
+        self.readout = Readout()
+
+        self.post_mlp = MLP(
             output,
             hidden,
-            post_process,
+            readout_layers,
             activation=hidden_activation,
             final_activation=activation,
         )
+
         if self.use_edge_features:
-            self.pre_edge = MLP(
+            self.pre_edges = MLP(
                 hidden,
                 hidden,
-                edge_process,
+                edge_preprocess_layers,
                 activation=hidden_activation,
                 final_activation=hidden_activation,
             )
 
     def call(self, inputs):
+        
+        x, a, e, i = self._get_inputs(inputs)
+            
+        # Pre-process
+        x = self.pre_nodes(x)
+        if self.use_edge_features:
+            e = self.pre_edge(e)
+
+        z = self.conv1([x, a])
+        z = self.conv2([z, a])
+
+        if self.batch_mode:
+            x1, a = self.pool1([z,a])
+            x1_out = self.readout(x1)
+        elif e is not None and self.pool_method == "smoothpool":
+                    x1, a, i = self.pool1([z, a, e, i])
+                    x1_out = self.readout([x1, i])
+        else:
+            x1, a, i = self.pool1([z, a, i])
+            x1_out = self.readout([x1, i])
+        
+        z = self.conv3([x1, a])
+        z = self.conv4([z, a])
+        
+        if self.batch_mode:
+            x2, a = self.pool1([z,a])
+            x2_out = self.readout(x2)
+        elif e is not None and self.pool_method == "smoothpool":
+                    x2, a, i = self.pool2([z, a, e, i])
+                    x2_out = self.readout([x2, i])
+        else:
+            x2, a, i = self.pool2([z, a, i])
+            x2_out = self.readout([x2, i])
+        
+        x3 = self.conv5([x2, a])    
+        
+        if self.batch_mode:
+            x3_out = self.readout(x3)
+        else:
+            x3_out = self.readout([x3, i])
+      
+
+        x_out = x1_out + x2_out + x3_out
+        
+        out = self.post_mlp(x_out)
+        return out
+
+    def _get_inputs(self, inputs):
         batch_mode = False
         e = None
         if len(inputs) == 2:
@@ -123,38 +178,26 @@ class HpoolGNN(Model):
                 i = None
         else:
             x, a, e, i = inputs
-            
-        # Pre-process
-        out = self.pre(x)
-        if self.use_edge_features:
-            e = self.pre_edge(e)
-        # Message passing
-        i_layer = 0
+        
+        self.batch_mode = batch_mode
+        return x, a, e, i
 
-        for layer in self.gnn:
-            i_layer += 1
-            out = layer([out, a])
-            if self.i_hpool is not None and i_layer == self.i_hpool:
-                if batch_mode:
-                    out, a = self.h_pool([out, a])
-                elif e is not None and self.pool_method == "smoothpool":
-                    out, a, i = self.h_pool([out, a, e, i])
-                else:
-                    out, a, i = self.h_pool([out, a, i])
-        # Global pooling
-        if self.gpool is not None:
-            if batch_mode:
-                out = self.gpool(x)
-            else:
-                out = self.gpool([out] + ([i] if i is not None else []))
-        # Post-process
-        out = self.post(out)
-
-        return out
 
     def get_config(self):
         return self.config
 
+
+class Readout(Model):
+    def __init__(self) -> None:
+        super().__init__()
+        self.global_mean = global_pool.get("avg")()
+        self.global_sum  = global_pool.get("sum")()
+
+    def call(self, inputs):
+        x_mean = self.global_mean(inputs)
+        x_sum = self.global_sum(inputs)
+        x_readout = tf.concat([x_mean, x_sum], -1)
+        return x_readout
 
 class MLP(Model):
     def __init__(

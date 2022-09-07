@@ -21,35 +21,37 @@ if len(physical_devices) > 0:
 batch_size = 32
 learning_rate = 0.01
 epochs = 400
-k = 0.7
+k = 0.5
 dataset = "COX2_MD"
 #dataset = "PROTEINS"
 #dataset = "DD"
 #dataset = "FRANKENSTEIN"
 data = TUDataset(dataset)
-pool_method = "smoothpool"
+pool_method = "diffpool"
 connectivity_augment = False
-use_edge_features = True
+use_edge_features = False
 
-method_descriptor = ""
+method_descriptor = f"The pooling method used is {pool_method}. K is {k}. "
+additional_descriptor = ""
 
 if pool_method == "smoothpool":
-    method_descriptor = f"The k is {k}, The pooling method used is {pool_method}, connectivity augment is {connectivity_augment}, use edge features is {use_edge_features}. "
-else:
-    method_descriptor = f"The k is {k}, The pooling method used is {pool_method}. "
+    if use_edge_features:
+        method_descriptor += "Edge features are used for pooling. "
+    if connectivity_augment:
+        connectivity_augment = calculate_augment(data)
+        method_descriptor += f"Connectivity augment is {connectivity_augment}. "
+
+if additional_descriptor != "":
+    method_descriptor += additional_descriptor
+
 print(method_descriptor)
 
 if pool_method == "diffpool":
     k = ratio_to_number(k, data)
 
-if connectivity_augment:
-    connectivity_augment = calculate_augment(data)
-    msg = f"connectivity_augment is {connectivity_augment}."
-    method_descriptor += msg
-    print(msg)
-
 accs=[]
 epochs_run=[]
+length_dataset = len(data)
 for i in range(80):
     model = HpoolGNN(data.n_labels, k=k, activation="softmax", 
                         i_hpool=3, 
@@ -60,8 +62,7 @@ for i in range(80):
     loss_fn = CategoricalCrossentropy()
     model.compile(optimizer=optimizer, loss=loss_fn, metrics=[CategoricalAccuracy(name="acc"),])
     
-    # Train/test split
-    length_dataset = len(data)
+    # Train/test split    
     idx_tr, idx_va, idx_te = shuffle_and_split(length_dataset)
     data_tr, data_va, data_te = data[idx_tr], data[idx_va], data[idx_te]
 
@@ -75,6 +76,7 @@ for i in range(80):
         loader_te = DisjointLoader(data_te, batch_size=batch_size)
 
     earlystopping_monitor= EarlyStopping(patience=40, restore_best_weights=True, monitor="val_loss", mode="min")
+
     model.fit(
         loader_tr.load(),
         steps_per_epoch=loader_tr.steps_per_epoch,
@@ -84,6 +86,7 @@ for i in range(80):
         validation_steps=loader_va.steps_per_epoch,
         verbose=0,
     )
+
     print(f"The {i+1} run completes, testing model...")
     
     loss, acc = model.evaluate(loader_te.load(), steps=loader_te.steps_per_epoch)
