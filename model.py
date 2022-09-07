@@ -41,11 +41,9 @@ class HpoolGNN(Model):
         activation=None,
         hidden=256,
         preprocess_layers=3,
-        readout_layers=2,
+        post_layers=2,
         edge_preprocess_layers=2, 
         hidden_activation="tanh",
-        gpool="sum",
-        i_hpool=None,
         h_pool=None,
         k=None,
         connectivity_augment=None,
@@ -57,22 +55,14 @@ class HpoolGNN(Model):
             "activation": activation,
             "hidden": hidden,
             "preprocess_layers": preprocess_layers,
-            "readout_layers": readout_layers,
+            "post_layers": post_layers,
             "hidden_activation": hidden_activation,
-            "gpool": gpool,
-            "i_hpool": i_hpool,
             "h_pool": h_pool,
             "k": k,
             "connectivity_augmen": connectivity_augment,
             "use_edge_features": use_edge_features,
             "edge_preprocess_layers": edge_preprocess_layers
         }
-
-        # Global pooling
-        if gpool is not None:
-            self.gpool = global_pool.get(gpool)()
-        else:
-            self.gpool = None
 
         self.use_edge_features=use_edge_features
 
@@ -101,7 +91,7 @@ class HpoolGNN(Model):
         self.post_mlp = MLP(
             output,
             hidden,
-            readout_layers,
+            post_layers,
             activation=hidden_activation,
             final_activation=activation,
         )

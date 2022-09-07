@@ -54,7 +54,6 @@ epochs_run=[]
 length_dataset = len(data)
 for i in range(80):
     model = HpoolGNN(data.n_labels, k=k, activation="softmax", 
-                        i_hpool=3, 
                         h_pool=pool_method, 
                         connectivity_augment=connectivity_augment,
                         use_edge_features=use_edge_features)
