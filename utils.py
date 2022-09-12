@@ -2,7 +2,7 @@
 This module provides utils functions used in trainning.
 """
 from __future__ import annotations
-from statistics import stdev, mean
+import statistics 
 import numpy as np
 import networkx as nx
 
@@ -21,9 +21,9 @@ def save_data(file_name, datas: list[float], pool_method_descriptor: str, epochs
         for data in datas:
             f.write(f"{data}, ")            
         f.write("\n")
-        std = stdev(datas)
-        avg = mean(datas)
-        avg_epoch=mean(epochs)
+        std = statistics.stdev(datas)
+        avg = statistics.mean(datas)
+        avg_epoch=statistics.mean(epochs)
         f.write(f"mean: {avg}, stdev: {std}, average epochs run {avg_epoch}\n")
 
 def shuffle_and_split(length_dataset: int) -> tuple:    

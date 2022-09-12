@@ -27,7 +27,7 @@ dataset = "COX2_MD"
 #dataset = "DD"
 #dataset = "FRANKENSTEIN"
 data = TUDataset(dataset)
-pool_method = "diffpool"
+pool_method = "sagpool"
 connectivity_augment = False
 use_edge_features = False
 

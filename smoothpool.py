@@ -1,11 +1,32 @@
-from re import A
-from spektral.layers.pooling import TopKPool
-from spektral.layers import MessagePassing
-from spektral.layers.ops import scatter_mean, scatter_sum, matrix_power
-from tensorflow.keras import backend as K
+"""
+This module provides our custom pooling layer.
+"""
 import tensorflow as tf
+from spektral import layers
+from spektral.layers import pooling, ops
+from tensorflow.keras import backend as K
 
-class SmoothPool(TopKPool):
+
+class SmoothPool(pooling.TopKPool):
+    """Pooling layer that performs local pooling on input graph, resulting a coarsened graph.
+
+    Usage:
+    smoothpool = Smoothpool(k, mlp) #k is the ratio of pooling and mlp is a multilayer perceptron.
+    x, a, e, i = smoothpool(x, a, e, i) 
+    #x, a, e and i represents node feature, adjancency matrix, edge feature and indices repectively.
+    
+
+    Arguments:
+        ratio: Ratio of pooling. A float between 0 and 1.
+        mlp: A multilayer perceptron.
+        connectivity_augment: Value of connectivity augmentaion. Nore or an int.
+        use_edge_features: Whether to use edge features. A boolean.
+        return_selection: Whether to return the selection mask. A boolean.
+        return_score: Whether to return the node scoring vector. A boolean.
+
+    Todo:
+    Replacing mlp with light weight vector.
+    """
     def __init__(
         self,
         ratio,
@@ -14,46 +35,64 @@ class SmoothPool(TopKPool):
         use_edge_features=False,
         return_selection=False,
         return_score=False,
-        sigmoid_gating=False,
-        kernel_initializer="glorot_uniform",
-        kernel_regularizer=None,
-        kernel_constraint=None,
         **kwargs
     ):
         super().__init__(
             ratio,
             return_selection=return_selection,
             return_score=return_score,
-            sigmoid_gating=sigmoid_gating,
-            kernel_initializer=kernel_initializer,
-            kernel_regularizer=kernel_regularizer,
-            kernel_constraint=kernel_constraint,
             **kwargs
         )
-        self.smoothmp = SmoothMP(mlp, use_edge_features=use_edge_features)
+        self.smoothmp = SmoothMP(mlp)
         self.connectivity_augment = connectivity_augment
+        self.use_edge_features = use_edge_features
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs:list, **kwargs) -> list:
+        """Receives input graph and produces coarsened graph
+        
+        Args:
+            inputs: list of value that represents (a batch of) graphs. A list.
+        
+        returns:
+            outputs: list of value that represents (a batch of) coarsened graphs. A list.
+        """
         x, a, e, i = self.get_inputs(inputs)
+
+        if self.use_edge_features is False:
+            e = None
+
         smoothness = self.smoothmp([x, a, e])
-        output = self.pool(x, a, i, y=smoothness)
+        outputs = self.pool(x, a, i, y=smoothness)       
+        x, a, i = outputs
+        e = None
+
+        outputs = [x, a, e, i]
+
         if self.return_score:
-            output.append(smoothness)
-        return output
+            outputs.append(smoothness)
+
+        return outputs
     
     def connect(self, a, s, **kwargs):
-        if self.connectivity_augment is not None:
-            assert isinstance(self.connectivity_augment, int), "Invalid connectivity augment parameter!"
-            a = matrix_power(a, self.connectivity_augment)
+        """See pooling.SRCpool.connect"""
+        # Augment graph connectivity with given value.
+        if self.connectivity_augment is not None:      
+            if not isinstance(self.connectivity_augment, int):
+                raise ValueError("Invalid connectivity augment value!")      
+            a = ops.matrix_power(a, self.connectivity_augment)
             a_values = tf.clip_by_value(a.values, clip_value_min=0, clip_value_max=1)
             a = tf.SparseTensor(indices=a.indices, values=a_values, dense_shape=a.dense_shape)
+
         return super().connect(a, s, **kwargs)
 
     def reduce(self, x, s, y=None):
+        """See pooling.SRCpool.reduce"""
         x_pool = tf.gather(x * y, s)
+
         return x_pool
     
     def get_inputs(self, inputs):
+        """Parses x, a, e and i from given inputs"""
         if len(inputs) == 3:
             x, a, i = inputs
             if K.ndim(i) == 2:
@@ -73,22 +112,29 @@ class SmoothPool(TopKPool):
 
     def build(self, input_shape):
         self.n_nodes = input_shape[0][0]
-        super(TopKPool, self).build(input_shape)
+        super(pooling.TopKPool, self).build(input_shape)
 
-class SmoothMP(MessagePassing):
-    def __init__(self, mlp, use_edge_features=False, **kwargs):
+class SmoothMP(layers.MessagePassing):
+    """Message passing layer that produces features for local pooling. See layers.MessagePassing.
+    
+    Arguments:
+        mlp: A multilayer perceptron.
+
+    Todo:
+    Replacing mlp with light weight vector.
+    """
+    def __init__(self, mlp, **kwargs):
         super().__init__(**kwargs)
         self.mlp = mlp
-        self.use_edge_features = use_edge_features
     
     def message(self, x, **kwargs):
         diff = self.get_sources(x)-self.get_targets(x)
         return diff
     
     def aggregate(self, messages, e=None, **kwargs):
-        diff_agg = scatter_mean(messages, self.index_targets, self.n_nodes)
-        if e is not None and self.use_edge_features:
-            divergence = scatter_sum(e, self.index_targets, self.n_nodes)
+        diff_agg = ops.scatter_mean(messages, self.index_targets, self.n_nodes)
+        if e is not None:
+            divergence = ops.scatter_sum(e, self.index_targets, self.n_nodes)
             return tf.concat([diff_agg, divergence], -1)
         else:
             return diff_agg
@@ -126,6 +172,7 @@ class SmoothMP(MessagePassing):
 
 
 if __name__ == "__main__":
+    # test message passing.
     X = tf.convert_to_tensor([[1,2,3,4],
                               [1,3,2,4],
                               [3,1,4,2],
