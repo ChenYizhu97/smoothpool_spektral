@@ -1,6 +1,3 @@
-from statistics import stdev, mean
-import numpy as np
-import networkx as nx
 import tensorflow as tf
 from spektral.data import DisjointLoader, BatchLoader
 from spektral.datasets import TUDataset
