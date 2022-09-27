@@ -19,5 +19,4 @@ An mlp is used to transform features to rank scores.
 python train.py
 
 ## Todo
-- Add argument parser to train.py
 - Replace mlp with light weight vector.
