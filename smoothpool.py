@@ -5,7 +5,7 @@ import tensorflow as tf
 from spektral import layers
 from spektral.layers import pooling, ops
 from tensorflow.keras import backend as K
-
+from keras.layers import Dense
 
 class SmoothPool(pooling.TopKPool):
     """Pooling layer that performs local pooling on input graph, resulting a coarsened graph.
@@ -30,7 +30,7 @@ class SmoothPool(pooling.TopKPool):
     def __init__(
         self,
         ratio,
-        mlp=None,
+        hidden=3,
         connectivity_augment=None,
         use_edge_features=False,
         return_selection=False,
@@ -43,10 +43,20 @@ class SmoothPool(pooling.TopKPool):
             return_score=return_score,
             **kwargs
         )
-        self.smoothmp = SmoothMP(mlp)
+
+        self.hidden = hidden
         self.connectivity_augment = connectivity_augment
         self.use_edge_features = use_edge_features
-
+    
+        self.dense_node_features = Dense(self.hidden, activation="tanh")
+        self.dense_diff = Dense(self.hidden, activation="tanh")
+        self.dense_score = Dense(1, activation="sigmoid")
+        if self.use_edge_features is True:
+            self.dense_div = Dense(self.hidden, activation="tanh")
+        else:
+            self.dense_div = None
+        self.smoothmp = SmoothMP(self.dense_node_features, self.dense_diff, self.dense_score, self.dense_div)
+  
     def call(self, inputs:list, **kwargs) -> list:
         """Receives input graph and produces coarsened graph
         
@@ -123,9 +133,12 @@ class SmoothMP(layers.MessagePassing):
     Todo:
     Replacing mlp with light weight vector.
     """
-    def __init__(self, mlp, **kwargs):
+    def __init__(self, dense_node_features, dense_diff, dense_score, dense_div=None, **kwargs):
         super().__init__(**kwargs)
-        self.mlp = mlp
+        self.dense_node_features = dense_node_features
+        self.dense_diff = dense_diff
+        self.dense_score = dense_score
+        self.dense_div = dense_div
     
     def message(self, x, **kwargs):
         diff = self.get_sources(x)-self.get_targets(x)
@@ -133,8 +146,10 @@ class SmoothMP(layers.MessagePassing):
     
     def aggregate(self, messages, e=None, **kwargs):
         diff_agg = ops.scatter_mean(messages, self.index_targets, self.n_nodes)
-        if e is not None:
-            divergence = ops.scatter_sum(e, self.index_targets, self.n_nodes)
+        diff_agg = self.dense_diff(diff_agg)
+        if e is not None and self.dense_div is not None:
+            divergence = ops.scatter_mean(e, self.index_targets, self.n_nodes)
+            divergence = self.dense_div(divergence)
             return tf.concat([diff_agg, divergence], -1)
         else:
             return diff_agg
@@ -142,8 +157,9 @@ class SmoothMP(layers.MessagePassing):
     def call(self, inputs, **kwargs):
         x, a, e = self.get_inputs(inputs)
         diff_and_dive = self.propagate(x, a, e)
+        x = self.dense_node_features(x)
         z = tf.concat([x, diff_and_dive], -1)
-        z = self.mlp(z)
+        z = self.dense_score(z)
         return z
 
     @staticmethod
@@ -172,7 +188,6 @@ class SmoothMP(layers.MessagePassing):
 
 
 if __name__ == "__main__":
-    # test message passing.
     X = tf.convert_to_tensor([[1,2,3,4],
                               [1,3,2,4],
                               [3,1,4,2],
@@ -182,8 +197,19 @@ if __name__ == "__main__":
     A = tf.SparseTensor(indices=[[0,1],[0,2],[1,0],[1,3],[2,0],[2,3],[3,1],[3,2],],
                         values=[1,1,1,1,1,1,1,1],
                         dense_shape=[4,4])
+    E = None
+    I = tf.ones((X.shape[0],), tf.int32)
+    print(I)
+    """
+    # test message passing.
     print(tf.sparse.to_dense(A))
     mlp = lambda x:x 
     smoothmp = SmoothMP(mlp=mlp)
     z = smoothmp([X,A])
     print(z)
+    """
+    # test input shape
+    mlp = lambda x:x
+    smoothpool = SmoothPool(0.5,mlp)
+    x, a, e, i = smoothpool([X,A,E,I])
+    

@@ -37,8 +37,7 @@ def get_hpool(h_pool:str, k:float, hidden:int, connectivity_augment=None, use_ed
     if h_pool == "topkpool" and k is not None:
         h_pool = TopKPool(k)
     if h_pool == "smoothpool" and k is not None:
-        mlp = MLP(1, hidden=hidden, layers=3, final_activation="sigmoid")
-        h_pool = SmoothPool(k, mlp=mlp, connectivity_augment=connectivity_augment, use_edge_features=use_edge_features)
+        h_pool = SmoothPool(k, connectivity_augment=connectivity_augment, use_edge_features=use_edge_features)
     if h_pool == "sagpool" and k is not None:
         h_pool = SAGPool(k)
 

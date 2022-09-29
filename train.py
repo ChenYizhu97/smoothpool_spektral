@@ -30,6 +30,7 @@ parser.add_argument("--edges", action="store_true", help="Use edge features.")
 parser.add_argument("--augment", action="store_true", help="Connectivity augmentation.")
 parser.add_argument("-r", default="80", type=int, help="Running times of evaluation.")
 parser.add_argument("-p", default="40", type=int, help="Patience of early stopping.")
+parser.add_argument("-d", default="", type=str, help="Addtional description to be logged.")
 
 args = parser.parse_args()
 batch_size = args.batch
@@ -48,7 +49,7 @@ run_times = args.r
 patience = args.p
 
 method_descriptor = f"The pooling method used is {pool_method}. K is {k}. "
-additional_descriptor = ""
+additional_descriptor = args.d
 
 if pool_method == "smoothpool":
     if use_edge_features:
@@ -60,7 +61,10 @@ if pool_method == "smoothpool":
 if additional_descriptor != "":
     method_descriptor += additional_descriptor
 
+print("*"*10)
+print(f"Dataset used is {dataset}...")
 print(method_descriptor)
+print("*"*10)
 
 if pool_method == "diffpool":
     k = ratio_to_number(k, data)

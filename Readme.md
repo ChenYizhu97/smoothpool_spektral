@@ -19,4 +19,5 @@ An mlp is used to transform features to rank scores.
 python train.py
 
 ## Todo
-- Replace mlp with light weight vector.
+- Evaluate on large-scale dataset.
+- Revise and detail readme.
