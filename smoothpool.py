@@ -11,21 +11,18 @@ class SmoothPool(pooling.TopKPool):
     """Pooling layer that performs local pooling on input graph, resulting a coarsened graph.
 
     Usage:
-    smoothpool = Smoothpool(k, mlp) #k is the ratio of pooling and mlp is a multilayer perceptron.
+    smoothpool = Smoothpool(k) #k is the ratio of pooling.
     x, a, e, i = smoothpool(x, a, e, i) 
     #x, a, e and i represents node feature, adjancency matrix, edge feature and indices repectively.
     
 
     Arguments:
         ratio: Ratio of pooling. A float between 0 and 1.
-        mlp: A multilayer perceptron.
+        hidden: Hidden unit of the trainable vectors. An Int.
         connectivity_augment: Value of connectivity augmentaion. Nore or an int.
         use_edge_features: Whether to use edge features. A boolean.
         return_selection: Whether to return the selection mask. A boolean.
         return_score: Whether to return the node scoring vector. A boolean.
-
-    Todo:
-    Replacing mlp with light weight vector.
     """
     def __init__(
         self,
@@ -128,10 +125,10 @@ class SmoothMP(layers.MessagePassing):
     """Message passing layer that produces features for local pooling. See layers.MessagePassing.
     
     Arguments:
-        mlp: A multilayer perceptron.
-
-    Todo:
-    Replacing mlp with light weight vector.
+        dense_node_features: Trainable vector that transforms node features. A dense layer.
+        dense_diff: Trainbale vector that transforms differences. A dense layer.
+        dense_score: Trainbale vector that produces rank scores. A dense layer.
+        dense_dive: Trainbale vector that transforms divergences. A dense layer or None.
     """
     def __init__(self, dense_node_features, dense_diff, dense_score, dense_div=None, **kwargs):
         super().__init__(**kwargs)
