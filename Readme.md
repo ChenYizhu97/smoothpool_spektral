@@ -1,13 +1,19 @@
 # Spektral implementation of smoothpool
-spektral implementation of smoothpool. Here is an overall description of smoothpool:
+Spektral implementation of smoothpool. 
 
-![smoothpool](figure_smoothpool.PNG)
+Here is an overall description of smoothpool:
 
-The features for pooling is collected by:
+![smoothpool](smoothpool.PNG)
 
-![collect features](figure_features.PNG)
+During step 1, we collect three features for pooling:
 
-An mlp is used to transform features to rank scores.
+![collect features](step1.PNG)
+
+During step 2, the rank score is produced by 4 learnable vectors as follow:
+
+![produce rank score](step2.PNG)
+
+In this way, we utilize node features, graph topology and edge features when producing rank score.
 
 ## Requirments
 - tensorflow
@@ -16,8 +22,9 @@ An mlp is used to transform features to rank scores.
 - networkx
 
 ## Usage
-python train.py
+python main.py
+
+Use python main.py -h for the help information.
 
 ## Todo
 - Evaluate on large-scale dataset.
-- Revise and detail readme.

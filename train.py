@@ -10,26 +10,21 @@ from tensorflow.keras.backend import clear_session
 from model import HpoolGNN
 from utils import save_data, shuffle_and_split, ratio_to_number, calculate_augment 
 
-
-physical_devices = tf.config.list_physical_devices("GPU")
-if len(physical_devices) > 0:
-    tf.config.experimental.set_memory_growth(physical_devices[0], True)
-
 parser = argparse.ArgumentParser(description="Trains and evaluates pooling methods...")
-parser.add_argument("--batch", default="32", type=int, help="Batch size.",)
-parser.add_argument("--lr", default="0.01", type=float, help="Learning rate.",)
-parser.add_argument("--epochs", default="400", type=int, help="Maximum epoches.",)
-parser.add_argument("-k", default="0.5", type=float, help="Ratio of pooling.",)
-parser.add_argument("--dataset", default="FRANKENSTEIN", help="Dataset for testing.",
+parser.add_argument("--batch", default="32", type=int, help="Batch size. 32 by default.",)
+parser.add_argument("--lr", default="0.01", type=float, help="Learning rate. 0.01 by default.",)
+parser.add_argument("--epochs", default="400", type=int, help="Maximum epoches. 400 by default.",)
+parser.add_argument("-k", default="0.5", type=float, help="Ratio of pooling. 0.5 by default.",)
+parser.add_argument("--dataset", default="FRANKENSTEIN", help="Dataset for testing. FRANKENSTEIN by default.",
                     choices=["FRANKENSTEIN", "PROTEINS", "DD"]
                     )
-parser.add_argument("--pool", default="topkpool", help="Pooling method to use.",
+parser.add_argument("--pool", default="topkpool", help="Pooling method to use. topkpool by default.",
                     choices=["smoothpool", "topkpool", "sagpool", "diffpool"]
                     )
 parser.add_argument("--edges", action="store_true", help="Use edge features.")
 parser.add_argument("--augment", action="store_true", help="Connectivity augmentation.")
-parser.add_argument("-r", default="80", type=int, help="Running times of evaluation.")
-parser.add_argument("-p", default="40", type=int, help="Patience of early stopping.")
+parser.add_argument("-r", default="30", type=int, help="Running times of evaluation. 30 by default.")
+parser.add_argument("-p", default="40", type=int, help="Patience of early stopping. 40 by default.")
 parser.add_argument("-d", default="", type=str, help="Addtional description to be logged.")
 
 args = parser.parse_args()
@@ -38,17 +33,21 @@ learning_rate = args.lr
 epochs = args.epochs
 k = args.k
 dataset = args.dataset
-#dataset = "PROTEINS"
-#dataset = "DD"
-#dataset = "FRANKENSTEIN"
-data = TUDataset(dataset)
 pool_method = args.pool
 connectivity_augment = args.augment
 use_edge_features = args.edges
 run_times = args.r
 patience = args.p
 
-method_descriptor = f"The pooling method used is {pool_method}. K is {k}. "
+physical_devices = tf.config.list_physical_devices("GPU")
+if len(physical_devices) > 0:
+    tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
+data = TUDataset(dataset)
+method_descriptor = f"Hyperparameters are set as follow. Batch size: {batch_size}. Learning rate: {learning_rate}, \
+maximum epochs: {epochs}. Runing time: {run_times}. Patience: {patience}. \
+The pooling method used is {pool_method}. K is {k}. "
+
 additional_descriptor = args.d
 
 if pool_method == "smoothpool":
@@ -73,6 +72,7 @@ accs=[]
 epochs_run=[]
 length_dataset = len(data)
 for i in range(run_times):
+    # Initialize model, loss function and optimizer.
     model = HpoolGNN(data.n_labels, k=k, activation="softmax", 
                         h_pool=pool_method, 
                         connectivity_augment=connectivity_augment,
@@ -81,7 +81,7 @@ for i in range(run_times):
     loss_fn = CategoricalCrossentropy()
     model.compile(optimizer=optimizer, loss=loss_fn, metrics=[CategoricalAccuracy(name="acc"),])
     
-    # Train/test split    
+    # Split training, validation and testing dataset   
     idx_tr, idx_va, idx_te = shuffle_and_split(length_dataset)
     data_tr, data_va, data_te = data[idx_tr], data[idx_va], data[idx_te]
 
@@ -93,9 +93,9 @@ for i in range(run_times):
         loader_tr = DisjointLoader(data_tr, batch_size=batch_size, epochs=epochs)
         loader_va = DisjointLoader(data_va, batch_size=batch_size,)
         loader_te = DisjointLoader(data_te, batch_size=batch_size)
-
+    
+    # Train with early stopping
     earlystopping_monitor= EarlyStopping(patience=patience, restore_best_weights=True, monitor="val_loss", mode="min")
-
     model.fit(
         loader_tr.load(),
         steps_per_epoch=loader_tr.steps_per_epoch,
@@ -108,6 +108,7 @@ for i in range(run_times):
 
     print(f"The {i+1} run completes, testing model...")
     
+    # Evaluate on test set and record metrics
     loss, acc = model.evaluate(loader_te.load(), steps=loader_te.steps_per_epoch)
     epoch_run = earlystopping_monitor.stopped_epoch
     

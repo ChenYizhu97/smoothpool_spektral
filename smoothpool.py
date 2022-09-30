@@ -5,7 +5,7 @@ import tensorflow as tf
 from spektral import layers
 from spektral.layers import pooling, ops
 from tensorflow.keras import backend as K
-from keras.layers import Dense
+from tensorflow.keras.layers import Dense
 
 class SmoothPool(pooling.TopKPool):
     """Pooling layer that performs local pooling on input graph, resulting a coarsened graph.
