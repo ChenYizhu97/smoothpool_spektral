@@ -28,56 +28,48 @@ parser.add_argument("-p", default="40", type=int, help="Patience of early stoppi
 parser.add_argument("-d", default="", type=str, help="Addtional description to be logged.")
 
 args = parser.parse_args()
-batch_size = args.batch
-learning_rate = args.lr
-epochs = args.epochs
-k = args.k
-dataset = args.dataset
-pool_method = args.pool
-connectivity_augment = args.augment
-use_edge_features = args.edges
-run_times = args.r
-patience = args.p
 
 physical_devices = tf.config.list_physical_devices("GPU")
 if len(physical_devices) > 0:
     tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
-data = TUDataset(dataset)
-method_descriptor = f"Hyperparameters are set as follow. Batch size: {batch_size}. Learning rate: {learning_rate}, \
-maximum epochs: {epochs}. Runing time: {run_times}. Patience: {patience}. \
-The pooling method used is {pool_method}. K is {k}. "
+method_descriptor = f"The pooling method used is {args.pool}. K is {args.k}. \
+Hyperparameters are set as follow. Batch size: {args.batch}. Learning rate: {args.lr}, \
+maximum epochs: {args.epochs}. Runing time: {args.r}. Patience: {args.p}. "
 
 additional_descriptor = args.d
+data = TUDataset(args.dataset)
 
-if pool_method == "smoothpool":
-    if use_edge_features:
+if args.pool == "smoothpool":
+    if args.edges:
         method_descriptor += "Edge features are used for pooling. "
-    if connectivity_augment:
-        connectivity_augment = calculate_augment(data)
-        method_descriptor += f"Connectivity augment is {connectivity_augment}. "
+    if args.augment:
+        args.augment = calculate_augment(data)
+        method_descriptor += f"Connectivity augment is {args.augment}. "
 
 if additional_descriptor != "":
     method_descriptor += additional_descriptor
 
 print("*"*10)
-print(f"Dataset used is {dataset}...")
+print(f"Dataset used is {args.dataset}...")
 print(method_descriptor)
 print("*"*10)
 
-if pool_method == "diffpool":
-    k = ratio_to_number(k, data)
+if args.pool == "diffpool":
+    k = ratio_to_number(args.k, data)
+else:
+    k = args.k
 
 accs=[]
 epochs_run=[]
 length_dataset = len(data)
-for i in range(run_times):
+for i in range(args.r):
     # Initialize model, loss function and optimizer.
     model = HpoolGNN(data.n_labels, k=k, activation="softmax", 
-                        h_pool=pool_method, 
-                        connectivity_augment=connectivity_augment,
-                        use_edge_features=use_edge_features)
-    optimizer = Adam(learning_rate)
+                        h_pool=args.pool, 
+                        connectivity_augment=args.augment,
+                        use_edge_features=args.edges)
+    optimizer = Adam(args.lr)
     loss_fn = CategoricalCrossentropy()
     model.compile(optimizer=optimizer, loss=loss_fn, metrics=[CategoricalAccuracy(name="acc"),])
     
@@ -85,21 +77,21 @@ for i in range(run_times):
     idx_tr, idx_va, idx_te = shuffle_and_split(length_dataset)
     data_tr, data_va, data_te = data[idx_tr], data[idx_va], data[idx_te]
 
-    if pool_method == "diffpool":
-        loader_tr = BatchLoader(data_tr, batch_size=batch_size, epochs=epochs)
-        loader_va = BatchLoader(data_va, batch_size=batch_size,)
-        loader_te = BatchLoader(data_te, batch_size=batch_size,)
+    if args.pool == "diffpool":
+        loader_tr = BatchLoader(data_tr, batch_size=args.batch, epochs=args.epochs)
+        loader_va = BatchLoader(data_va, batch_size=args.batch,)
+        loader_te = BatchLoader(data_te, batch_size=args.batch,)
     else:
-        loader_tr = DisjointLoader(data_tr, batch_size=batch_size, epochs=epochs)
-        loader_va = DisjointLoader(data_va, batch_size=batch_size,)
-        loader_te = DisjointLoader(data_te, batch_size=batch_size)
+        loader_tr = DisjointLoader(data_tr, batch_size=args.batch, epochs=args.epochs)
+        loader_va = DisjointLoader(data_va, batch_size=args.batch,)
+        loader_te = DisjointLoader(data_te, batch_size=args.batch)
     
     # Train with early stopping
-    earlystopping_monitor= EarlyStopping(patience=patience, restore_best_weights=True, monitor="val_loss", mode="min")
+    earlystopping_monitor= EarlyStopping(patience=args.p, restore_best_weights=True, monitor="val_loss", mode="min")
     model.fit(
         loader_tr.load(),
         steps_per_epoch=loader_tr.steps_per_epoch,
-        epochs=epochs,
+        epochs=args.epochs,
         callbacks=[earlystopping_monitor],
         validation_data=loader_va,
         validation_steps=loader_va.steps_per_epoch,
@@ -119,6 +111,6 @@ for i in range(run_times):
     
     clear_session()
 
-file_name = f"DATA_{dataset}.txt"
+file_name = f"DATA_{args.dataset}.txt"
 save_data(file_name, accs, method_descriptor, epochs_run)
 #print(accs)
