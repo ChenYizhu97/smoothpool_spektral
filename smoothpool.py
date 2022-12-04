@@ -67,7 +67,6 @@ class SmoothPool(pooling.TopKPool):
 
         if self.use_edge_features is False:
             e = None
-
         smoothness = self.smoothmp([x, a, e])
         outputs = self.pool(x, a, i, y=smoothness)       
         x, a, i = outputs

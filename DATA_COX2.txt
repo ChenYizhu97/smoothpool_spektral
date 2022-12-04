@@ -1,0 +1,12 @@
+The pooling method used is smoothpool. K is 0.5. Running time is 20.     Hyperparameters are set as follow. Batch size: 32. Learning rate: 0.01,     maximum epochs: 400. Runing time: 20. Patience: 40. Using fixed seeds. 
+0.7872, 0.8298, 0.8298, 0.8723, 0.7234, 0.7660, 0.6809, 0.7660, 0.8298, 0.7872, 0.8936, 0.6809, 0.7447, 0.7234, 0.7872, 0.7872, 0.8085, 0.7872, 0.7872, 0.6809, 
+mean: 0.7777, stdev: 0.0596, average epochs run 88
+The pooling method used is topkpool. K is 0.5. Running time is 20.     Hyperparameters are set as follow. Batch size: 32. Learning rate: 0.01,     maximum epochs: 400. Runing time: 20. Patience: 40. Using fixed seeds. 
+0.8511, 0.8085, 0.8511, 0.8298, 0.7660, 0.7234, 0.6596, 0.7660, 0.7660, 0.7660, 0.8511, 0.7234, 0.7234, 0.8298, 0.7021, 0.7234, 0.7872, 0.7872, 0.7872, 0.6809, 
+mean: 0.7691, stdev: 0.0575, average epochs run 82
+The pooling method used is sagpool. K is 0.5. Running time is 20.     Hyperparameters are set as follow. Batch size: 32. Learning rate: 0.01,     maximum epochs: 400. Runing time: 20. Patience: 40. Using fixed seeds. 
+0.8085, 0.8298, 0.8085, 0.8511, 0.6809, 0.7447, 0.7447, 0.7447, 0.8085, 0.7872, 0.8936, 0.7660, 0.7447, 0.7660, 0.7447, 0.7447, 0.7660, 0.8085, 0.7447, 0.6809, 
+mean: 0.7734, stdev: 0.0522, average epochs run 83
+The pooling method used is diffpool. K is 0.5. Running time is 20.     Hyperparameters are set as follow. Batch size: 32. Learning rate: 0.01,     maximum epochs: 400. Runing time: 20. Patience: 40. Using fixed seeds. 
+0.6596, 0.8085, 0.7447, 0.8723, 0.7660, 0.7021, 0.7234, 0.7234, 0.7234, 0.7234, 0.8085, 0.7447, 0.7447, 0.7447, 0.7872, 0.7021, 0.7660, 0.5957, 0.7872, 0.7872, 
+mean: 0.7457, stdev: 0.0588, average epochs run 120

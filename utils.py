@@ -9,7 +9,6 @@ from spektral.layers import TopKPool, SAGPool, DiffPool
 from model import BasicModel
 from smoothpool import SmoothPool
 
-
 def save_data(file_name, datas: list[float], pool_method_descriptor: str, epochs: list[int]):
     """Saves the metrics to file.
 
@@ -22,29 +21,13 @@ def save_data(file_name, datas: list[float], pool_method_descriptor: str, epochs
     with open(file_name, "a") as f:
         f.write(pool_method_descriptor+"\n")
         for data in datas:
-            f.write(f"{data}, ")            
+            f.write(f"{data:.4f}, ")            
         f.write("\n")
         std = statistics.stdev(datas)
         avg = statistics.mean(datas)
-        avg_epoch=statistics.mean(epochs)
-        f.write(f"mean: {avg}, stdev: {std}, average epochs run {avg_epoch}\n")
+        avg_epoch=int(statistics.mean(epochs))
+        f.write(f"mean: {avg:.4f}, stdev: {std:.4f}, average epochs run {avg_epoch}\n")
 
-def shuffle_and_split(length_dataset: int) -> tuple:    
-    """Returns training, validation and test splitting indexs for dataset with length length_dataset.
-
-    Args:
-        length_dataset: The length of dataset. A int.
-    
-    Returns:
-        idx_tr: Indexs of training set. A list of numpy array.
-        idx_va: Indexs of validation set . A list of numpy array.
-        idx_te: Indexs of test set. A list of numpy array.
-    """
-    idxs = np.random.permutation(length_dataset)
-    split_va, split_te = int(0.8 * length_dataset), int(0.9 * length_dataset)
-    idx_tr, idx_va, idx_te = np.split(idxs, [split_va, split_te])
-
-    return idx_tr, idx_va, idx_te
 
 def ratio_to_number(k: float, dataset) -> int:
     """Calculates fix number of centroids from the ratio of pooling.
@@ -119,7 +102,7 @@ def read_seeds(filename:str) -> list[int]:
         seeds = [int(seed) for seed in seeds]
     return seeds
 
-def get_model(out, pooling_method:str, k, use_edge_features=False, activation="softmax") -> BasicModel:
+def create_model(out, pooling_method:str, k, use_edge_features=False, activation="softmax") -> BasicModel:
     """Returns the hierarchical gnn model for given pooling methods.
     
     Args:
@@ -144,6 +127,3 @@ def get_model(out, pooling_method:str, k, use_edge_features=False, activation="s
 
     model = BasicModel(out, pool=pool, use_edge_features=use_edge_features, activation=activation)
     return model
-
-def get_loader(idx_tr, idx_te):
-    pass

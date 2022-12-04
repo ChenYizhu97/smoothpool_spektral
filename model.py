@@ -7,11 +7,8 @@ from spektral.layers.pooling import (
     global_pool,
 )
 from spektral.models.general_gnn import MLP
-from tensorflow.keras import Model, Sequential
+from tensorflow.keras import Model
 from tensorflow.keras.layers import (
-    Activation,
-    BatchNormalization,
-    Dense,
     Concatenate,
 )
 
@@ -79,16 +76,16 @@ class BasicModel(Model):
 
     def call(self, inputs):
         """basic model with 2 GNN layers"""
-        x, a, e, i = self._get_inputs(inputs)
-        x = self.pre_nodes(x)
+        x, a, e, i = self.pre_process(inputs)
         x = self.skip([self.conv1([x,a]), x])
         #x = self.conv1([x,a])
         inputs = [x, a]
-        if i is not None:
-            inputs.append(i)
+
         if e is not None:
             inputs.append(e)
-       
+        if i is not None:
+            inputs.append(i)
+               
         outputs = self.pool(inputs)
         if len(outputs) == 2:
             x, a = outputs
