@@ -1,151 +1,111 @@
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
+from ogb.graphproppred import GraphPropPredDataset
+from spektral.datasets import TUDataset, OGB
+from spektral.transforms import OneHotLabels
+from spektral.layers import TopKPool, SAGPool, DiffPool
 from spektral.data.loaders import BatchLoader, DisjointLoader
 from tensorflow.keras.losses import CategoricalCrossentropy
 from tensorflow.keras.metrics import CategoricalAccuracy
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.backend import clear_session
-from utils import create_model
+from model import BasicModel
+from smoothpool import SmoothPool
 
 
-def shuffle_and_split(length_dataset: int) -> tuple:    
-    """Returns training, validation and test splitting indexs for dataset with length length_dataset.
-
+def create_model(out, pooling_method:str, k, use_edge_features=False, activation="softmax") -> BasicModel:
+    """Returns the hierarchical gnn model for given pooling methods.
+    
     Args:
-        length_dataset: The length of dataset. A int.
+        out: Number of out channels. A int. 
+        pooling_method: Pooling method to be used. A string.
+        k: Ratio of pooling. A float between 0 and 1. For diffpool, its a fixed int numbers.
+        use_edge_features: Whether to use edge features. A boolean.
+        activation: Activation function that keras supports. A string
     
     Returns:
-        idx_tr: Indexs of training set. A list of numpy array.
-        idx_va: Indexs of validation set . A list of numpy array.
-        idx_te: Indexs of test set. A list of numpy array.
+        model: A hierarchical pooling GNN model. A subclass of HpoolGNN.
     """
-    idxs = np.random.permutation(length_dataset)
-    split_va, split_te = int(0.8 * length_dataset), int(0.9 * length_dataset)
-    idx_tr, idx_va, idx_te = np.split(idxs, [split_va, split_te])
+    pool = lambda x:x
+    if pooling_method == "smoothpool":
+        pool = SmoothPool(k, use_edge_features=use_edge_features)
+    if pooling_method == "topkpool":
+        pool = TopKPool(k)
+    if pooling_method == "sagpool":
+        pool = SAGPool(k)
+    if pooling_method == "diffpool":
+        pool = DiffPool(k, 256)
 
-    return idx_tr, idx_va, idx_te
+    model = BasicModel(out, pool=pool, use_edge_features=use_edge_features, activation=activation)
+    return model
 
-def generate_method_description(pool:str="smoothpool",
-                                k:float=0.5, 
-                                r:int=30, 
-                                batch:int=32, 
-                                lr:float=0.01, 
-                                epochs:int=400, 
-                                p:int=40, 
-                                d:str="",
-                                edges:bool=False,
-                                dataset:str="FRANKENSTEIN"
-                                )->str:
-    """Generate string that descripts the method and parameters used
-    
-    Return:
-        method_descriptor: String that descripts the method and parameters used.
-    """
-    method_descriptor = f"The pooling method used is {pool}. K is {k}. Running time is {r}. \
-    Hyperparameters are set as follow. Batch size: {batch}. Learning rate: {lr}, \
-    maximum epochs: {epochs}. Runing time: {r}. Patience: {p}. Using fixed seeds. "
+def transformer_ogb(graph):
+    graph.y = graph.y[0]
+    graph.a = graph.a.astype("f4")
+    return graph
 
-    additional_descriptor = d
-
-    if pool == "smoothpool":
-        if edges:
-            method_descriptor += "Edge features are used for pooling. "
-        #if args.augment:
-        #    args.augment = calculate_augment(data)
-        #    method_descriptor += f"Connectivity augment is {args.augment}. "
-
-    if additional_descriptor != "":
-        method_descriptor += additional_descriptor
-
-    print("*"*10)
-    print(f"Dataset used is {dataset}...")
-    print(method_descriptor)
-    print("*"*10)
-    
-    return method_descriptor
-
-def run_with_randomsplit(dataset, pool, batch, epochs, edges, lr, p, k, seed=None):
-    length_dataset = len(dataset)
-    # Set fixed seed for each run.
-    tf.keras.utils.set_random_seed(seed)
-    idx_tr, idx_va, idx_te = shuffle_and_split(length_dataset)
-    data_tr, data_va, data_te = dataset[idx_tr], dataset[idx_va], dataset[idx_te]
-    if pool == "diffpool":
-        loader_tr = BatchLoader(data_tr, batch_size=batch, epochs=epochs, shuffle=False)
-        loader_va = BatchLoader(data_va, batch_size=batch, shuffle=False)
-        loader_te = BatchLoader(data_te, batch_size=batch, shuffle=False)
+def load_data(dataset):
+    split_idx = None
+    if dataset in TUDataset.available_datasets():
+        data = TUDataset(dataset)
+    elif dataset.startswith("ogbg"):
+        data = GraphPropPredDataset(dataset)
+        #get split index provided by ogb
+        idx = data.get_idx_split()
+        idx_tr, idx_va, idx_te = idx["train"], idx["valid"], idx["test"]
+        data = OGB(data)
+        #one hot encode for ogb dataset.
+        labels = data.map(lambda g: g.y, reduce=np.unique)
+        data.apply(transformer_ogb)
+        data.apply(OneHotLabels(labels=labels))
+        split_idx = [idx_tr, idx_va, idx_te]
     else:
-        loader_tr = DisjointLoader(data_tr, batch_size=batch, epochs=epochs, shuffle=False)
-        loader_va = DisjointLoader(data_va, batch_size=batch, shuffle=False)
-        loader_te = DisjointLoader(data_te, batch_size=batch, shuffle=False)
-    
-    acc, loss, epoch = train_and_eval(
-        dataset.n_labels,
-        pool,
-        edges,
-        epochs,
-        lr,
-        p,
-        k,
-        loader_tr, loader_te, loader_va=loader_va)
-    return acc, loss, epoch
+        data = None
+    return data, split_idx
 
-def train_and_eval(n_labels, pool, edges, epochs, lr, p, k, loader_tr, loader_te, loader_va=None):
-    """sets up model, trains and evaluates"""
-    model = create_model(n_labels, pool, k, use_edge_features=edges, activation="softmax")
-    optimizer = Adam(lr)
+def run_classifier(dataset, pool, batch, epochs, edges, lr, p, k, split_idx=None, seed=None):
+    #sets fixed seed for each run.
+    tf.keras.utils.set_random_seed(seed)
+    #split data
+    if split_idx is not None:
+        idx_tr, idx_va, idx_te = split_idx
+    else:
+        l_data = len(dataset)
+        idxs = np.random.permutation(l_data)
+        split_va, split_te = int(0.8 * l_data), int(0.9 * l_data)
+        idx_tr, idx_va, idx_te = np.split(idxs, [split_va, split_te])
+    data_tr, data_va, data_te = dataset[idx_tr], dataset[idx_va], dataset[idx_te]    
+    
+    if pool == "diffpool":
+        loader_class = BatchLoader
+        #calculates fixed k for diffpool
+        N_avg = dataset.map(lambda g: g.n_nodes, reduce=lambda res: np.ceil(np.mean(res)))
+        k = int(k*N_avg)
+    else:
+        loader_class = DisjointLoader
+    #wraps data in spektral loader
+    loader_tr = loader_class(data_tr, batch_size=batch, epochs=epochs, shuffle=True)
+    loader_va = loader_class(data_va, batch_size=batch, shuffle=True)
+    loader_te = loader_class(data_te, batch_size=batch, shuffle=True)
+    #creates model, loss function and optimizer
+    model = create_model(dataset.n_labels, pool, k, use_edge_features=edges, activation="softmax")
     loss_fn = CategoricalCrossentropy()
+    optimizer = Adam(lr)
     model.compile(optimizer=optimizer, loss=loss_fn, metrics=[CategoricalAccuracy(name="acc"),])
-    # if there is a validation set, early stoping monitors the validation loss.
-    if loader_va is not None:
-        earlystopping_monitor= EarlyStopping(patience=p, restore_best_weights=True, monitor="val_loss", mode="min")
-        model.fit(
+    #sets earlystoping monitor
+    monitor = EarlyStopping(patience=p, restore_best_weights=True, monitor="val_loss", mode="min")
+    #trains and evaluates
+    model.fit(
             loader_tr,
             steps_per_epoch=loader_tr.steps_per_epoch,
             epochs=epochs,
             validation_data=loader_va,
             validation_steps=loader_va.steps_per_epoch,
-            callbacks=[earlystopping_monitor],
+            callbacks=[monitor],
             verbose=0,
-        )
-    else:
-        earlystopping_monitor= EarlyStopping(patience=p, restore_best_weights=True, monitor="loss", mode="min")
-        model.fit(
-            loader_tr,
-            steps_per_epoch=loader_tr.steps_per_epoch,
-            epochs=epochs,
-            callbacks=[earlystopping_monitor],
-            verbose=0,
-        )
+    )
     loss, acc = model.evaluate(loader_te, steps=loader_te.steps_per_epoch)
-    epoch_run = earlystopping_monitor.stopped_epoch   
+    epoch_run = monitor.stopped_epoch
     clear_session()
     return acc, loss, epoch_run
-
-"""
-def run_with_10fold(i_run:int, length_dataset:int, seed=None):
-    # Set fixed seed for each run.
-    tf.keras.utils.set_random_seed(seed)
-    #10-fold cross validation
-    kf10 = KFold(10, shuffle=True, random_state=seed)
-    acc_folds = 0
-    epoch_folds = 0
-    for i_fold, (idx_tr, idx_te) in enumerate(kf10.split(range(length_dataset))):
-        # prepare train and test set for each fold.
-        data_tr, data_te = data[idx_tr],  data[idx_te]
-        if args.pool == "diffpool":
-            loader_tr = BatchLoader(data_tr, batch_size=args.batch, epochs=args.epochs)
-            loader_te = BatchLoader(data_te, batch_size=args.batch,)
-        else:
-            loader_tr = DisjointLoader(data_tr, batch_size=args.batch, epochs=args.epochs,)
-            loader_te = DisjointLoader(data_te, batch_size=args.batch,)
-        # Initialize model, train and evaluate.
-        acc, loss, epoch = train_and_eval(loader_tr, loader_te)
-        print(f"Done. The {i_fold+1} fold of {i_run+1} run. Test loss: {loss}. Test acc: {acc}. Epoch run: {epoch}")
-        acc_folds += acc
-        epoch_folds += epoch
-    acc_run = acc_folds/10
-    epoch_run = epoch_folds/10
-    return acc_run, epoch_run
-"""

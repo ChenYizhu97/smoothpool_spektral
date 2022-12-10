@@ -5,9 +5,7 @@ from __future__ import annotations
 import statistics 
 import numpy as np
 import networkx as nx
-from spektral.layers import TopKPool, SAGPool, DiffPool
-from model import BasicModel
-from smoothpool import SmoothPool
+
 
 def save_data(file_name, datas: list[float], pool_method_descriptor: str, epochs: list[int]):
     """Saves the metrics to file.
@@ -27,25 +25,6 @@ def save_data(file_name, datas: list[float], pool_method_descriptor: str, epochs
         avg = statistics.mean(datas)
         avg_epoch=int(statistics.mean(epochs))
         f.write(f"mean: {avg:.4f}, stdev: {std:.4f}, average epochs run {avg_epoch}\n")
-
-
-def ratio_to_number(k: float, dataset) -> int:
-    """Calculates fix number of centroids from the ratio of pooling.
-    
-    Args:
-        k: Ratio of pooling. A float.
-        dataset: Spektral dataset.
-
-    Returns:
-        k_fixed: Fix number of centroids. An int.
-    """
-    n = 0
-    for graph in dataset:
-        n += graph.n_nodes
-    n /= dataset.n_graphs
-
-    k_fixed = int(k*n)
-    return k_fixed
 
 def calculate_augment(dataset) -> int:
     """Calculates the value for connectivity augmentation used by smoothpool.
@@ -102,28 +81,41 @@ def read_seeds(filename:str) -> list[int]:
         seeds = [int(seed) for seed in seeds]
     return seeds
 
-def create_model(out, pooling_method:str, k, use_edge_features=False, activation="softmax") -> BasicModel:
-    """Returns the hierarchical gnn model for given pooling methods.
+def generate_experiment_descriptor(pool:str="smoothpool",
+                                k:float=0.5, 
+                                r:int=30, 
+                                batch:int=32, 
+                                lr:float=0.01, 
+                                epochs:int=400, 
+                                p:int=40, 
+                                d:str="",
+                                edges:bool=False,
+                                dataset:str="FRANKENSTEIN"
+                                )->str:
+    """Generate string that descripts the method and parameters used
     
-    Args:
-        out: Number of out channels. A int. 
-        pooling_method: Pooling method to be used. A string.
-        k: Ratio of pooling. A float between 0 and 1. For diffpool, its a fixed int numbers.
-        use_edge_features: Whether to use edge features. A boolean.
-        activation: Activation function that keras supports. A string
-    
-    Returns:
-        model: A hierarchical pooling GNN model. A subclass of HpoolGNN.
+    Return:
+        descriptor: String that descripts the method and parameters used.
     """
-    pool = lambda x:x
-    if pooling_method == "smoothpool":
-        pool = SmoothPool(k, use_edge_features=use_edge_features)
-    if pooling_method == "topkpool":
-        pool = TopKPool(k)
-    if pooling_method == "sagpool":
-        pool = SAGPool(k)
-    if pooling_method == "diffpool":
-        pool = DiffPool(k, 256)
+    descriptor = f"The pooling method used is {pool}. K is {k}. Running time is {r}. \
+    Hyperparameters are set as follow. Batch size: {batch}. Learning rate: {lr}, \
+    maximum epochs: {epochs}. Runing time: {r}. Patience: {p}. Using fixed seeds. "
 
-    model = BasicModel(out, pool=pool, use_edge_features=use_edge_features, activation=activation)
-    return model
+    additional_descriptor = d
+
+    if pool == "smoothpool":
+        if edges:
+            descriptor += "Edge features are used for pooling. "
+        #if args.augment:
+        #    args.augment = calculate_augment(data)
+        #    descriptor += f"Connectivity augment is {args.augment}. "
+
+    if additional_descriptor != "":
+        descriptor += additional_descriptor
+
+    print("*"*10)
+    print(f"Dataset used is {dataset}...")
+    print(descriptor)
+    print("*"*10)
+    
+    return descriptor
