@@ -1,5 +1,5 @@
 import argparse
-from utils import generate_random_seeds
+from smoothpool.classification.utils import generate_random_seeds
 
 parser = argparse.ArgumentParser(description="Randomly generate fixed seeds...")
 parser.add_argument("-n", default=30, type=int, help="Number of seeds.")

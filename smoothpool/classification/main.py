@@ -1,8 +1,8 @@
 import os
 import argparse
 import tensorflow as tf
-from utils import save_data, read_seeds, generate_experiment_descriptor
-from train_utils import run_classifier, load_data
+from smoothpool.classification.utils import save_data, read_seeds, generate_experiment_descriptor
+from smoothpool.classification.train_utils import run_classifier, load_data
 
 
 parser = argparse.ArgumentParser(description="Trains and evaluates pooling methods...")

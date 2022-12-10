@@ -4,7 +4,6 @@ This module provides utils functions used in trainning.
 from __future__ import annotations
 import statistics 
 import numpy as np
-import networkx as nx
 
 
 def save_data(file_name, datas: list[float], pool_method_descriptor: str, epochs: list[int]):
@@ -25,29 +24,6 @@ def save_data(file_name, datas: list[float], pool_method_descriptor: str, epochs
         avg = statistics.mean(datas)
         avg_epoch=int(statistics.mean(epochs))
         f.write(f"mean: {avg:.4f}, stdev: {std:.4f}, average epochs run {avg_epoch}\n")
-
-def calculate_augment(dataset) -> int:
-    """Calculates the value for connectivity augmentation used by smoothpool.
-    
-    Args:
-        dataset: A Spektral dataset.
-    
-    Returns:
-        connectivity_augment: Value for connectivity augmentation. An int.
-    """
-    aves = []
-    for graph in dataset:
-        adj = graph.a
-        g = nx.from_scipy_sparse_array(adj)
-        ave_c = []
-        for C in (g.subgraph(c).copy() for c in nx.connected_components(g)):
-            ave = nx.average_shortest_path_length(C)
-            ave_c.append(ave)
-        ave = sum(ave_c)/len(ave_c)
-        aves.append(ave)
-    connectivity_augment = int(sum(aves)/len(aves))  
-
-    return connectivity_augment
 
 def generate_random_seeds(filename:str, n:int):
     """Generates random seeds, and writes them into the given file.

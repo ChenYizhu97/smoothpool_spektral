@@ -10,8 +10,8 @@ from tensorflow.keras.metrics import CategoricalAccuracy
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.backend import clear_session
-from model import BasicModel
-from smoothpool import SmoothPool
+from smoothpool.models.classifier import BasicModel
+from smoothpool.models.smoothpool import SmoothPool
 
 
 def create_model(out, pooling_method:str, k, use_edge_features=False, activation="softmax") -> BasicModel:
