@@ -1,28 +1,28 @@
 """
 This module provides utils functions used in trainning.
 """
-from __future__ import annotations
-import statistics 
+from __future__ import annotations 
 import numpy as np
 
 
-def save_data(file_name, datas: list[float], pool_method_descriptor: str, epochs: list[int]):
+def save_data(file_name, results, pool_method_descriptor: str):
     """Saves the metrics to file.
-
-    Args:
-        file_name: The name of file for saving data. A string.
-        datas: List of metrics. A list of float.
-        pool_method_descriptor: A string describing the pooling method.
-        epochs: Epochs that have been done. A list of int.
     """ 
+    accs, losses, epochs = results
     with open(file_name, "a") as f:
         f.write(pool_method_descriptor+"\n")
-        for data in datas:
-            f.write(f"{data:.4f}, ")            
+        for acc in accs:
+            f.write(f"{acc:.4f}, ")            
         f.write("\n")
-        std = statistics.stdev(datas)
-        avg = statistics.mean(datas)
-        avg_epoch=int(statistics.mean(epochs))
+        for loss in losses:
+            f.write(f"{loss:.4f}, ")            
+        f.write("\n")
+        for epoch in epochs:
+            f.write(f"{epoch:.4f}, ")            
+        f.write("\n")
+        std = np.std(accs)
+        avg = np.mean(accs)
+        avg_epoch=int(np.mean(epochs))
         f.write(f"mean: {avg:.4f}, stdev: {std:.4f}, average epochs run {avg_epoch}\n")
 
 def generate_random_seeds(filename:str, n:int):
@@ -73,15 +73,13 @@ def generate_experiment_descriptor(pool:str="smoothpool",
     Return:
         descriptor: String that descripts the method and parameters used.
     """
-    descriptor = f"The pooling method used is {pool}. K is {k}. Running time is {r}. \
-    Hyperparameters are set as follow. Batch size: {batch}. Learning rate: {lr}, \
-    maximum epochs: {epochs}. Runing time: {r}. Patience: {p}. Using fixed seeds. "
+    descriptor = f"pooling operator: {pool} ; k: {k}; r: {r}; batch size: {batch}; lr: {lr}; maximum epochs: {epochs}; patience: {p}; fixed seeds;"
 
     additional_descriptor = d
 
     if pool == "smoothpool":
         if edges:
-            descriptor += "Edge features are used for pooling. "
+            descriptor += "Edge features;"
         #if args.augment:
         #    args.augment = calculate_augment(data)
         #    descriptor += f"Connectivity augment is {args.augment}. "
