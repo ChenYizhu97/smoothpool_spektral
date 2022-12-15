@@ -7,11 +7,11 @@ from smoothpool.classification.train import run_classifier, load_data
 
 parser = argparse.ArgumentParser(description="Trains and evaluates pooling methods...")
 parser.add_argument("--batch", default="32", type=int, help="Batch size. 32 by default.",)
-parser.add_argument("--lr", default="0.005", type=float, help="Learning rate. 0.005 by default.",)
+parser.add_argument("--lr", default="0.0001", type=float, help="Learning rate. 0.0001 by default.",)
 parser.add_argument("--epochs", default="400", type=int, help="Maximum epoches. 400 by default.",)
 parser.add_argument("-k", default="0.5", type=float, help="Ratio of pooling. 0.5 by default.",)
 parser.add_argument("--dataset", default="FRANKENSTEIN", help="Dataset for testing. FRANKENSTEIN by default.",
-                    choices=["FRANKENSTEIN", "PROTEINS", "AIDS", "ENZYMES", "COX2", "COX2_MD", "Mutagenicity", "ogbg-molbace", "ogbg-molbbbp","ogbg-molclintox", "ogbg-molhiv"]
+                    choices=["FRANKENSTEIN", "PROTEINS", "ENZYMES", "COX2", "Mutagenicity", "COX2_MD", "ER_MD", "COX2_MD", "BZR_MD", "ogbg-molhiv"]
                     )
 parser.add_argument("--pool", default="topkpool", help="Pooling method to use. topkpool by default.",
                     choices=["smoothpool", "topkpool", "sagpool", "diffpool"]
@@ -67,5 +67,5 @@ for i_run in range(args.r):
     epochs.append(epoch)
     results = [accs, losses, epochs] 
 
-file_name = f"DATA_{args.dataset}.txt"
+file_name = os.path.join("results", f"{args.dataset}.txt")
 save_data(file_name, results, experiment_descriptor)

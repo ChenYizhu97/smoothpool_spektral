@@ -11,19 +11,22 @@ def save_data(file_name, results, pool_method_descriptor: str):
     accs, losses, epochs = results
     with open(file_name, "a") as f:
         f.write(pool_method_descriptor+"\n")
+        f.write("acc: ")
         for acc in accs:
             f.write(f"{acc:.4f}, ")            
         f.write("\n")
+        f.write("loss: ")
         for loss in losses:
             f.write(f"{loss:.4f}, ")            
         f.write("\n")
+        f.write("epoch: ")
         for epoch in epochs:
-            f.write(f"{epoch:.4f}, ")            
+            f.write(f"{epoch}, ")            
         f.write("\n")
         std = np.std(accs)
         avg = np.mean(accs)
         avg_epoch=int(np.mean(epochs))
-        f.write(f"mean: {avg:.4f}, stdev: {std:.4f}, average epochs run {avg_epoch}\n")
+        f.write(f"mean: {avg:.4f}, stdev: {std:.4f}, average epochs run {avg_epoch}\n\n")
 
 def generate_random_seeds(filename:str, n:int):
     """Generates random seeds, and writes them into the given file.
@@ -73,13 +76,13 @@ def generate_experiment_descriptor(pool:str="smoothpool",
     Return:
         descriptor: String that descripts the method and parameters used.
     """
-    descriptor = f"pooling operator: {pool} ; k: {k}; r: {r}; batch size: {batch}; lr: {lr}; maximum epochs: {epochs}; patience: {p}; fixed seeds;"
+    descriptor = f"pooling operator: {pool}; k: {k}; r: {r}; batch size: {batch}; lr: {lr}; maximum epochs: {epochs}; patience: {p}; fixed seeds;"
 
     additional_descriptor = d
 
     if pool == "smoothpool":
         if edges:
-            descriptor += "Edge features;"
+            descriptor += " edge features;"
         #if args.augment:
         #    args.augment = calculate_augment(data)
         #    descriptor += f"Connectivity augment is {args.augment}. "
