@@ -1,3 +1,5 @@
+Unfortunately, this work is not the latest and we have changed the implementation from spektral to pytorch. Please see [LSPool](https://github.com/ChenYizhu97/LSPool) if you are interested in the project.
+
 # Spektral implementation of smoothpool
 Spektral implementation of smoothpool. 
 
